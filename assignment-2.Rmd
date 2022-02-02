@@ -1,0 +1,226 @@
+z---
+title: "Assignment 2 - Statistics II, Hertie School"
+output: html_document
+---
+
+
+```{r,include=FALSE}
+rm(list = ls())
+library(tidyverse)
+
+```
+
+
+### Task 1 - Should you brush your teeth? [5 points in total]
+
+In a [blog post](https://chrisblattman.com/2010/06/01/does-brushing-your-teeth-lower-cardiovascular-disease/), Christopher Blattman discusses a study published in the British Medical Journal that reports that participants who brushed their teeth less often had a 7%-points increase in the occurrence of a cardiovascular disease.
+
+a)  Let B = 1 if you brush your teeth often, and B = 0 if you don’t. Let H = 1 be the occurrence of a heart disease, H = 0 if not. Write down the naive average treatment effect (NATE) for the result that the researchers obtained (assuming they had population data). Discuss two sources of bias when comparing the NATE to the average treatment effect ATE.  [2 Pts]
+
+Assume the following
+
+Heart disease = H
+Brushing teeth (B)
+B=1 when you brush your theeth, and 
+B=0 when you don't.
+
+NATE = E(H^1|B=1)-E(H^0|B=0)
+
+Two sources of bias are baseline bias and the differential treatment effect bias. In this case, 
+
+Baseline bias is the difference in the average outcome in the absence of treatment between those who brush their teeth often and those who don't. And
+
+Differential treatment bias is the difference in the average treatment effect between those who brush their teeth often and those who do not.
+
+b) Draw a causal graph with variables "Brush Teeth" (B), "Heart Disease" (H), and (individual-level) "Health Consciousness" (C) that formalizes a possible argument for why the observed association might not be a causal effect. [2 Pts]
+
+```{r}
+library(ggdag)
+conf <- confounder_triangle(x="B", y="H", z="C")
+
+ggdag(conf, text = FALSE, use_labels = "label")
+```
+Explanation:
+
+Although there is a natural/given association between brushing teeth and heart diseases due to a confounder Health conciousness, the association is not causal.
+
+
+
+c) Suggest a research design that is more robust against confounders to identify the causal effect between teeth brushing and cardiovascular disease! [1 Pt]
+
+The research design robust against confounders would be the one that conditions for Health Conciousness (C).This conditioning removes the statistical independence by introducing the association between the two variables. 
+
+
+<br>
+========================================================
+
+
+### Task 2 - Simulating a basic structural causal model in R [6 points in total]
+
+In R, it is straightforward to generate simulated data from a structural causal model. For instance, a simple confounder structure would be:
+
+```{r}
+animal <- rep(c("cat", "dog"), each = 500)
+weight <- rnorm(1000, 4, .5) + 10 * as.numeric(animal == "dog")
+sleepDaily <- rnorm(1000, 15, 2) - 2 * as.numeric(animal == "dog")
+dat <- data.frame(animal, weight, sleepDaily, stringsAsFactors = FALSE)
+```
+
+
+a) Run the code in R and then use the plot() command (or commands from the ggplot2 package if you are familiar with that) to show visually how weight and daily sleep in hours are related! Ensure that the plot is formatted nicely. [2 Pts]
+
+```{r}
+weshoe <- ggplot(dat, 
+                   aes(x = weight, y = sleepDaily)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) + 
+  xlab("weight") + 
+  ylab("daily sleep in hours")
+
+weshoe
+
+```
+
+b) Adapt the plot in a way that highlights the role of the species in the causal model! [1 Pt]
+
+```{r}
+spice <- ggplot(dat, 
+                   aes(x = weight, y = sleepDaily, 
+                             color = animal)) +
+  geom_point() + 
+  geom_smooth(method = "lm", se = FALSE) +
+  xlab("weight") + 
+  ylab("daily sleep in hours") 
+
+spice
+```
+
+c) Now set up another simulation to verify (in)dependencies for a simple collider structure! [3 Pts]
+
+Setting up
+```{r}
+# wealth having 5000 observations with mean 8 and sd 3 (arbitrary scale)
+wealth <- rnorm(5000, 8, 3)
+
+# job or occupation having 5000 observations with mean 10 and sd 5 (arbitrary scale)
+job <- rnorm(5000, 10, 5)
+
+# social status - binary
+status <-  ifelse(wealth + job > 10, "status" ,"not_status") 
+
+joint <- data.frame(wealth, job, status, 
+                  stringsAsFactors = FALSE)
+```
+
+Conditioning on status
+```{r}
+sosta <- joint %>% 
+  filter(status == "status")
+
+SostaPlot <- ggplot(sosta, 
+                     aes(x = wealth, y = job)) +
+    geom_point() +
+  xlab("Wealth") + 
+  ylab("Job") +
+  geom_smooth(method = "lm", se = FALSE)
+
+SostaPlot
+```
+
+From the plot, we can see that the two aspects are negatively related.
+
+<br>
+========================================================
+
+
+
+### Task 3 - Bad for him, Bad for her, but Good for everyone - wait what? [5 points in total]
+
+A doctor takes a look at research data about a new drug that promises to reduce the risk of heart disease. As an outcome, the doctor measured if patients had a heart attack or not. She studies both the effect among female and male patients. The doctor did not randomize the treatment with the new drug, instead, patients were able to decide whether they want to take the treatment or not.
+
+| Groups       | Heart Attack & Drug  | No Heart Attack & Drug | Heart Attack & No Drug   | No Heart Attack &  No Drug |   
+|------------- | ------------- | ------------- | ------------- |------------- |
+|Female        | 1             | 19            | 3             | 37           |
+|Male          | 12            | 28            | 8             | 12           |
+|Total         | 13            | 47            | 11            | 49           |
+
+
+```{r, include=FALSE}
+trail_data <- data.frame("Gender"=c("Female","Female","Male","Male"),
+                         "Treatment"=c("Drug","NoDrug","Drug","NoDrug"),
+                         "HeartAttack"=c(1,3,12,8),
+                         "NoHeartAttack"=c(19,37,28,12))
+```
+
+
+a) What is the naive average treatment effect of taking the drug on having a heart attack for everyone? What is the naive treatment effect for female and male patients? [2 Pts]
+
+For everyone
+```{r}
+everyo <- trail_data %>% 
+  group_by(Treatment) %>% #grouping data by Drug and non-Drug use (treatment)
+  summarize(HeartAttack = sum(HeartAttack), #summing those who had heartattack
+            NoHeartAttack = sum(NoHeartAttack)) %>% #summing those who did not have a heartattack
+  mutate(ShareHeartAttack = HeartAttack/(HeartAttack + NoHeartAttack)) %>% #creating a new column with the proportion
+  select(Treatment, ShareHeartAttack) %>% #selecting only column containing whether treatment was used or not 
+  spread(Treatment, ShareHeartAttack) %>% #transposing data
+  mutate(NATE = Drug - NoDrug) #NATE = Drug - NoDrug    
+
+everyo$NATE
+```
+For Male and Female
+```{r}
+gender <- trail_data %>% 
+  mutate(shareHeartAttack = HeartAttack/(HeartAttack + NoHeartAttack)) %>% # to get proportions
+  select(Gender, Treatment, shareHeartAttack) %>% # to select columns containing gender, whether drug was used and proportions
+  spread(Treatment, shareHeartAttack) %>% #to transpose data
+  mutate(NATE = Drug - NoDrug) %>% #to create a new column containing NATE for each gender
+  select(Gender, NATE)
+
+gender
+```
+
+b) Draw a DAG that helps you explain why the drug seems to be bad for females, bad for males, but good for everyone. What kind of bias creates this reversal in the effect? [1 Pt]
+
+```{r}
+dagify(HeartAttack ~ Drug,
+       Drug ~ Gender,
+       HeartAttack ~ Gender) %>% 
+  ggdag()
+```
+Explanation
+Conditioning for gender as a confounder gives us the association/relationship between taking the drug and heart attack.
+
+
+c) How could you calculate the causal effect taking the information about both male and female patients into account? [2 Pts]
+
+Through calculating the ATE by controlling for gender as the following code chunk explains.
+```{r}
+nateMale <- gender %>% 
+  filter(Gender == "Male") %>% 
+  pull(NATE)
+
+nateFemale <- gender %>% 
+  filter(Gender == "Female") %>% 
+  pull(NATE)
+
+# proportion of subjects male/female
+genderTotals <- trail_data %>% 
+  group_by(Gender) %>% 
+  summarize(total = sum(HeartAttack) + sum(NoHeartAttack)) %>% 
+  mutate(prop = total / sum(total))
+
+propMale <- genderTotals %>% 
+  filter(Gender == "Male") %>% 
+  pull(prop)
+
+propFemale <- genderTotals %>% 
+  filter(Gender == "Female") %>% 
+  pull(prop)
+
+# calculating ATE
+ATE <- (propFemale * nateFemale) + (propMale * nateMale)
+
+ATE
+```
+
